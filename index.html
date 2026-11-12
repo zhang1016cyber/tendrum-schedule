@@ -223,19 +223,34 @@ function renderDays(){
 function toggleChoice(date,value,container){
   let selected = choices[date] || [];
 
+  const hasMorning =
+    selected.includes("早") || selected.includes("早午");
+
+  const hasAfternoon =
+    selected.includes("午") || selected.includes("早午");
+
   if(value === "X"){
     selected = selected.includes("X") ? [] : ["X"];
-  }else if(value === "早午"){
-    selected = selected.includes("早午") ? [] : ["早午"];
   }else{
-    selected = selected.filter(x=>x!=="X" && x!=="早午");
+    let morning = hasMorning;
+    let afternoon = hasAfternoon;
 
-    selected = selected.includes(value)
-      ? selected.filter(x=>x!==value)
-      : [...selected,value];
+    if(value === "早"){
+      morning = !morning;
+    }
 
-    if(selected.includes("早") && selected.includes("午")){
+    if(value === "午"){
+      afternoon = !afternoon;
+    }
+
+    if(morning && afternoon){
       selected = ["早午"];
+    }else if(morning){
+      selected = ["早"];
+    }else if(afternoon){
+      selected = ["午"];
+    }else{
+      selected = [];
     }
   }
 
@@ -245,15 +260,15 @@ function toggleChoice(date,value,container){
     const label = button.textContent;
 
     const active =
-      (label==="早班" && selected.includes("早")) ||
-      (label==="午班" && selected.includes("午")) ||
-      (label==="早＋午" && selected.includes("早午")) ||
+      (label==="早上" &&
+        (selected.includes("早") || selected.includes("早午"))) ||
+      (label==="下午" &&
+        (selected.includes("午") || selected.includes("早午"))) ||
       (label==="全天不能上班" && selected.includes("X"));
 
     button.classList.toggle("selected",active);
   });
 }
-
 async function submitTrial(){
   if(!currentEmployee) return;
 
