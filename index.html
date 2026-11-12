@@ -76,7 +76,7 @@ th{color:#aab6c7}
 <p class="notice">
 填班期間：2026/12/05～12/07（12/07 23:59 截止）<br>
 填寫日期：2026/12/01～12/31，共 31 天。<br>
-每天必須選擇一個選項：早班、午班、早＋午或 X（全天不能上班）。<br>
+每天必須選擇一個選項：早班、午班或 X（全天不能上班）。<br>
 整月備註為選填。
 </p>
 <div id="days"></div>
@@ -198,9 +198,8 @@ function renderDays(){
     buttons.className = "choices";
 
     [
-      ["早","早班"],
-      ["午","午班"],
-      ["早午","早＋午"],
+      ["早","早上"],
+      ["午","下午"],
       ["X","全天不能上班"]
     ].forEach(([value,label])=>{
       const button = document.createElement("button");
