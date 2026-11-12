@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -29,6 +28,12 @@ th,td{text-align:left;padding:10px;border-bottom:1px solid #40516a;font-size:14p
 th{color:#aab6c7}
 .smallbtn{width:auto;padding:9px 14px;background:#334155;color:white}
 .status{padding:9px 12px;background:#26364c;border-radius:9px;margin:10px 0;white-space:pre-wrap}
+.day{background:#26364c;border-radius:12px;padding:12px;margin:10px 0}
+.dayhead{font-weight:700;margin-bottom:8px}
+.choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.choice{margin:0;padding:12px 5px;background:#334155;color:#fff;border:2px solid transparent;font-size:14px}
+.choice.selected{background:#20b981;color:#06291e;border-color:#a7f3d0}
+.notice{font-size:13px;color:#cbd5e1;line-height:1.6}
 [hidden]{display:none!important}
 @media(max-width:480px){body{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}main{margin:14px auto}}
 </style>
@@ -44,8 +49,8 @@ th{color:#aab6c7}
 <button id="managerTab" onclick="switchTab('manager')">主管登入</button>
 </nav>
 <div id="employee">
-<input id="code" placeholder="員工編號">
-<input id="name" placeholder="員工姓名">
+<input id="code" placeholder="員工編號" autocomplete="username">
+<input id="name" placeholder="員工姓名" autocomplete="name">
 <button onclick="employeeLogin()">登入</button>
 </div>
 <div id="manager" hidden>
@@ -54,6 +59,19 @@ th{color:#aab6c7}
 <button onclick="managerLogin()">登入</button>
 </div>
 <p id="message" class="muted"></p>
+</section>
+
+<section id="employeePortal" hidden>
+<div class="panel">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+<div><h2>員工填班</h2><div id="employeeLabel" class="muted"></div></div>
+<button class="smallbtn" onclick="employeeLogout()">登出</button>
+</div>
+<p class="notice">填班期間：2026/12/05～12/07（12/07 23:59 截止）<br>本次填寫日期：2026/12/01～12/15<br>早班、午班可同時選擇；X 代表全天不能上班，不能與早／午班同時選擇。未選日期代表尚未提供可上班時段。</p>
+<div id="days"></div>
+<button onclick="submitTrial()">提交試用填班</button>
+<div id="employeeStatus" class="status" aria-live="polite">請逐日選擇可上班時段。</div>
+</div>
 </section>
 
 <section id="dashboard" hidden>
@@ -66,203 +84,116 @@ th{color:#aab6c7}
 <div class="grid">
 <div class="metric"><span class="muted">員工總數</span><strong id="employeeCount">—</strong></div>
 <div class="metric"><span class="muted">月保人員</span><strong id="monthlyCount">—</strong></div>
-<div class="metric"><span class="muted">填班意願筆數</span><strong id="availabilityCount">—</strong></div>
+<div class="metric"><span class="muted">正式填班筆數</span><strong id="availabilityCount">—</strong></div>
+<div class="metric"><span class="muted">試用填班筆數</span><strong id="trialCount">—</strong></div>
 <div class="metric"><span class="muted">已排班筆數</span><strong id="shiftCount">—</strong></div>
 </div>
 </div>
-
-<div class="card">
-<h2>填班期間</h2>
-<div id="periodList" class="muted">讀取中…</div>
-</div>
-
-<div class="card">
-<h2>員工名冊</h2>
-<div class="tablewrap">
-<table>
-<thead><tr><th>員工編號</th><th>員工姓名</th><th>月保</th><th>狀態</th></tr></thead>
-<tbody id="employeeRows"></tbody>
-</table>
-</div>
-</div>
-
-<div class="card">
-<h2>員工填班意願</h2>
-<div class="tablewrap">
-<table>
-<thead><tr><th>日期</th><th>員工</th><th>意願</th></tr></thead>
-<tbody id="availabilityRows"></tbody>
-</table>
-</div>
-</div>
-
-<div class="card">
-<h2>目前班表</h2>
-<div class="tablewrap">
-<table>
-<thead><tr><th>日期</th><th>員工</th><th>班別</th><th>職位</th></tr></thead>
-<tbody id="shiftRows"></tbody>
-</table>
-</div>
-</div>
+<div class="card"><h2>填班期間</h2><div id="periodList" class="muted">讀取中…</div></div>
+<div class="card"><h2>員工名冊</h2><div class="tablewrap"><table><thead><tr><th>員工編號</th><th>員工姓名</th><th>月保</th><th>狀態</th></tr></thead><tbody id="employeeRows"></tbody></table></div></div>
+<div class="card"><h2>員工試用填班意願</h2><div class="tablewrap"><table><thead><tr><th>日期</th><th>員工編號</th><th>員工</th><th>意願</th></tr></thead><tbody id="trialRows"></tbody></table></div></div>
+<div class="card"><h2>正式填班意願</h2><div class="tablewrap"><table><thead><tr><th>日期</th><th>員工</th><th>意願</th></tr></thead><tbody id="availabilityRows"></tbody></table></div></div>
+<div class="card"><h2>目前班表</h2><div class="tablewrap"><table><thead><tr><th>日期</th><th>員工</th><th>班別</th><th>職位</th></tr></thead><tbody id="shiftRows"></tbody></table></div></div>
 </section>
 </main>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const db=supabase.createClient(
 "https://uhaqhjozybjhgsbpcnku.supabase.co",
 "sb_publishable_tB2cstpRYmFvTpanIe-haA_2EMHWnFS"
 );
-
 const el=id=>document.getElementById(id);
+let currentEmployee=null;
+const workDates=Array.from({length:15},(_,i)=>`2026-12-${String(i+1).padStart(2,'0')}`);
+const choices={};
 function show(s){el("message").textContent=s}
-
-function switchTab(t){
-el("employee").hidden=t!=="employee";
-el("manager").hidden=t!=="manager";
-el("employeeTab").classList.toggle("active",t==="employee");
-el("managerTab").classList.toggle("active",t==="manager");
-show("");
-}
-
+function switchTab(t){el("employee").hidden=t!=="employee";el("manager").hidden=t!=="manager";el("employeeTab").classList.toggle("active",t==="employee");el("managerTab").classList.toggle("active",t==="manager");show("")}
 async function employeeLogin(){
-show("正在確認員工資料…");
-const {data,error}=await db.rpc("employee_portal_login",{
-p_employee_code:el("code").value.trim(),
-p_display_name:el("name").value.trim()
-});
-show(error?"登入檢查失敗："+error.message:
-data&&data.length?"員工資料核對成功，填班功能尚未開放":"員工編號或姓名不正確");
+ const code=el("code").value.trim(),name=el("name").value.trim();
+ if(!code||!name){show("請輸入員工編號及姓名");return}
+ show("正在確認員工資料…");
+ const {data,error}=await db.rpc("employee_portal_login",{p_employee_code:code,p_display_name:name});
+ if(error){show("登入檢查失敗："+error.message);return}
+ if(!(data&&data.length)){show("員工編號或姓名不正確");return}
+ currentEmployee={code,name};
+ el("loginPanel").hidden=true;el("employeePortal").hidden=false;
+ el("employeeLabel").textContent=name+"｜"+code;
+ renderDays();el("employeeStatus").textContent="已核對員工資料。請選擇 12/1～12/15 的可上班時段。";
 }
-
+function renderDays(){
+ const root=el("days");root.replaceChildren();
+ workDates.forEach((date,index)=>{
+  const day=document.createElement("div");day.className="day";
+  const head=document.createElement("div");head.className="dayhead";head.textContent=`${date.slice(5).replace('-','/')}（${['二','三','四','五','六','日','一'][index%7]}）`;
+  const buttons=document.createElement("div");buttons.className="choices";
+  [['早','早班'],['午','午班'],['X','全天不能上班']].forEach(([value,label])=>{
+   const b=document.createElement("button");b.type="button";b.className="choice";b.textContent=label;
+   b.onclick=()=>toggleChoice(date,value,b,buttons);buttons.appendChild(b);
+  });
+  day.append(head,buttons);root.appendChild(day);choices[date]=[];
+ });
+}
+function toggleChoice(date,value,button,container){
+ let selected=choices[date]||[];
+ if(value==='X')selected=selected.includes('X')?[]:['X'];
+ else {selected=selected.filter(x=>x!=='X');selected=selected.includes(value)?selected.filter(x=>x!==value):[...selected,value];}
+ choices[date]=selected;
+ [...container.children].forEach(b=>b.classList.toggle('selected',(selected.includes('早')&&b.textContent==='早班')||(selected.includes('午')&&b.textContent==='午班')||(selected.includes('X')&&b.textContent==='全天不能上班')));
+}
+async function submitTrial(){
+ if(!currentEmployee)return;
+ const entries=workDates.filter(d=>(choices[d]||[]).length).map(d=>({work_date:d,preference:choices[d].includes('X')?'X':choices[d].length===2?'早午':choices[d][0]}));
+ if(!entries.length){el('employeeStatus').textContent='請至少選擇一天的填班意願再提交。';return;}
+ if(!confirm(`確定提交 ${entries.length} 天的試用填班資料嗎？重新提交會取代你先前的試用資料。`))return;
+ el('employeeStatus').textContent='正在提交試用資料…';
+ const {data,error}=await db.rpc('submit_trial_availability',{p_employee_code:currentEmployee.code,p_display_name:currentEmployee.name,p_entries:entries});
+ if(error){el('employeeStatus').textContent='提交失敗：'+error.message;return;}
+ el('employeeStatus').textContent=`提交成功！已儲存 ${data?.saved_count??entries.length} 天的試用填班資料。`;
+}
+function employeeLogout(){currentEmployee=null;el('employeePortal').hidden=true;el('loginPanel').hidden=false;el('code').value='';el('name').value='';show('已登出');}
 async function managerLogin(){
-show("正在登入…");
-const {data,error}=await db.auth.signInWithPassword({
-email:el("email").value.trim(),
-password:el("password").value
-});
-if(error){show("登入失敗："+error.message);return}
-
-const {data:profile,error:pe}=await db.from("profiles")
-.select("role,active,display_name")
-.eq("id",data.user.id).single();
-
-if(pe||profile?.role!=="manager"||!profile?.active){
-await db.auth.signOut();
-show("此帳號沒有主管權限");
-return;
+ show("正在登入…");
+ const {data,error}=await db.auth.signInWithPassword({email:el("email").value.trim(),password:el("password").value});
+ if(error){show("登入失敗："+error.message);return}
+ const {data:profile,error:pe}=await db.from("profiles").select("role,active,display_name").eq("id",data.user.id).single();
+ if(pe||profile?.role!=="manager"||!profile?.active){await db.auth.signOut();show("此帳號沒有主管權限");return;}
+ el("loginPanel").hidden=true;el("dashboard").hidden=false;el("managerLabel").textContent=(profile.display_name||"主管")+"｜唯讀檢視";await loadDashboard();
 }
-
-el("loginPanel").hidden=true;
-el("dashboard").hidden=false;
-el("managerLabel").textContent=(profile.display_name||"主管")+"｜唯讀檢視";
-await loadDashboard();
-}
-
-function cell(row,value){
-const td=document.createElement("td");
-td.textContent=value??"—";
-row.appendChild(td);
-}
-
-function emptyRow(tbody,msg,span){
-const tr=document.createElement("tr");
-const td=document.createElement("td");
-td.colSpan=span;
-td.textContent=msg;
-tr.appendChild(td);
-tbody.appendChild(tr);
-}
-
+function cell(row,value){const td=document.createElement("td");td.textContent=value??"—";row.appendChild(td)}
+function emptyRow(tbody,msg,span){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=span;td.textContent=msg;tr.appendChild(td);tbody.appendChild(tr)}
 async function loadDashboard(){
-el("loadMessage").textContent="正在讀取資料…";
-
-const names={};
-const results=await Promise.all([
-db.from("employees").select("id,employee_code,display_name,is_monthly,active").order("employee_code"),
-db.from("schedule_periods").select("id,title,starts_on,ends_on,submission_deadline,status").order("starts_on",{ascending:false}),
-db.from("availability").select("id,employee_id,work_date,preference,period_id").order("work_date"),
-db.from("shifts").select("id,employee_id,work_date,shift_code").order("work_date"),
-db.from("profiles").select("id,employee_code,display_name")
-]);
-
-const labels=["員工名冊","填班期間","填班意願","班表","員工帳號對照"];
-const errors=results.map((r,i)=>r.error?labels[i]+"："+r.error.message:null).filter(Boolean);
-
-const [empRes,periodRes,availRes,shiftRes,profileRes]=results;
-const employees=empRes.data||[];
-const periods=periodRes.data||[];
-const availability=availRes.data||[];
-const shifts=shiftRes.data||[];
-const profiles=profileRes.data||[];
-
-profiles.forEach(p=>names[p.id]=p.display_name||p.employee_code||p.id);
-
-el("employeeCount").textContent=empRes.error?"讀取失敗":employees.length;
-el("monthlyCount").textContent=empRes.error?"—":employees.filter(x=>x.is_monthly===true).length;
-el("availabilityCount").textContent=availRes.error?"讀取失敗":availability.length;
-el("shiftCount").textContent=shiftRes.error?"讀取失敗":shifts.length;
-
-el("periodList").textContent=periodRes.error?
-"讀取失敗："+periodRes.error.message:
-periods.length?
-periods.map(p=>p.title+"｜"+p.starts_on+"～"+p.ends_on+"｜"+p.status+"｜截止 "+p.submission_deadline).join("\n"):
-"目前沒有填班期間";
-
-const er=el("employeeRows");
-er.replaceChildren();
-if(empRes.error)emptyRow(er,empRes.error.message,4);
-else if(!employees.length)emptyRow(er,"目前沒有員工資料",4);
-
-employees.forEach(e=>{
-const tr=document.createElement("tr");
-cell(tr,e.employee_code);
-cell(tr,e.display_name);
-cell(tr,e.is_monthly?"是":"否");
-cell(tr,e.active?"啟用":"停用");
-er.appendChild(tr);
-});
-
-const ar=el("availabilityRows");
-ar.replaceChildren();
-if(availRes.error)emptyRow(ar,availRes.error.message,3);
-else if(!availability.length)emptyRow(ar,"目前尚無員工提交填班意願",3);
-
-availability.forEach(a=>{
-const tr=document.createElement("tr");
-cell(tr,a.work_date);
-cell(tr,names[a.employee_id]||"尚未對應員工帳號");
-cell(tr,a.preference);
-ar.appendChild(tr);
-});
-
-const sr=el("shiftRows");
-sr.replaceChildren();
-if(shiftRes.error)emptyRow(sr,shiftRes.error.message,4);
-else if(!shifts.length)emptyRow(sr,"目前尚無已排班資料",4);
-
-shifts.forEach(s=>{
-const tr=document.createElement("tr");
-cell(tr,s.work_date);
-cell(tr,names[s.employee_id]||"尚未對應員工帳號");
-cell(tr,s.shift_code);
-cell(tr,"尚未設定");
-sr.appendChild(tr);
-});
-
-el("loadMessage").textContent=errors.length?
-"部分資料讀取有問題：\n"+errors.join("\n"):
-"資料讀取完成。此頁目前僅供查看，不會修改資料。";
+ el("loadMessage").textContent="正在讀取資料…";
+ const names={};
+ const results=await Promise.all([
+  db.from("employees").select("id,employee_code,display_name,is_monthly,active").order("employee_code"),
+  db.from("schedule_periods").select("id,title,starts_on,ends_on,submission_deadline,status").order("starts_on",{ascending:false}),
+  db.from("availability").select("id,employee_id,work_date,preference,period_id").order("work_date"),
+  db.from("shifts").select("id,employee_id,work_date,shift_code").order("work_date"),
+  db.from("profiles").select("id,employee_code,display_name"),
+  db.from("availability_trial").select("id,employee_code,display_name,work_date,preference,submitted_at").order("work_date")
+ ]);
+ const labels=["員工名冊","填班期間","正式填班意願","班表","員工帳號對照","試用填班意願"];
+ const errors=results.map((r,i)=>r.error?labels[i]+"："+r.error.message:null).filter(Boolean);
+ const [empRes,periodRes,availRes,shiftRes,profileRes,trialRes]=results;
+ const employees=empRes.data||[],periods=periodRes.data||[],availability=availRes.data||[],shifts=shiftRes.data||[],profiles=profileRes.data||[],trials=trialRes.data||[];
+ profiles.forEach(p=>names[p.id]=p.display_name||p.employee_code||p.id);
+ el("employeeCount").textContent=empRes.error?"讀取失敗":employees.length;
+ el("monthlyCount").textContent=empRes.error?"—":employees.filter(x=>x.is_monthly===true).length;
+ el("availabilityCount").textContent=availRes.error?"讀取失敗":availability.length;
+ el("trialCount").textContent=trialRes.error?"讀取失敗":trials.length;
+ el("shiftCount").textContent=shiftRes.error?"讀取失敗":shifts.length;
+ el("periodList").textContent=periodRes.error?"讀取失敗："+periodRes.error.message:periods.length?periods.map(p=>p.title+"｜"+p.starts_on+"～"+p.ends_on+"｜"+p.status+"｜截止 "+p.submission_deadline).join("\n"):"目前沒有填班期間";
+ const er=el("employeeRows");er.replaceChildren();if(empRes.error)emptyRow(er,empRes.error.message,4);else if(!employees.length)emptyRow(er,"目前沒有員工資料",4);
+ employees.forEach(e=>{const tr=document.createElement("tr");cell(tr,e.employee_code);cell(tr,e.display_name);cell(tr,e.is_monthly?"是":"否");cell(tr,e.active?"啟用":"停用");er.appendChild(tr)});
+ const trr=el("trialRows");trr.replaceChildren();if(trialRes.error)emptyRow(trr,trialRes.error.message,4);else if(!trials.length)emptyRow(trr,"目前尚無試用填班資料",4);
+ trials.forEach(a=>{const tr=document.createElement("tr");cell(tr,a.work_date);cell(tr,a.employee_code);cell(tr,a.display_name);cell(tr,a.preference);trr.appendChild(tr)});
+ const ar=el("availabilityRows");ar.replaceChildren();if(availRes.error)emptyRow(ar,availRes.error.message,3);else if(!availability.length)emptyRow(ar,"目前尚無正式填班意願",3);
+ availability.forEach(a=>{const tr=document.createElement("tr");cell(tr,a.work_date);cell(tr,names[a.employee_id]||"尚未對應員工帳號");cell(tr,a.preference);ar.appendChild(tr)});
+ const sr=el("shiftRows");sr.replaceChildren();if(shiftRes.error)emptyRow(sr,shiftRes.error.message,4);else if(!shifts.length)emptyRow(sr,"目前尚無已排班資料",4);
+ shifts.forEach(s=>{const tr=document.createElement("tr");cell(tr,s.work_date);cell(tr,names[s.employee_id]||"尚未對應員工帳號");cell(tr,s.shift_code);cell(tr,"尚未設定");sr.appendChild(tr)});
+ el("loadMessage").textContent=errors.length?"部分資料讀取有問題：\n"+errors.join("\n"):"資料讀取完成。試用填班資料與正式排班資料分開顯示。";
 }
-
-async function logout(){
-await db.auth.signOut();
-el("dashboard").hidden=true;
-el("loginPanel").hidden=false;
-el("password").value="";
-show("已登出");
-}
+async function logout(){await db.auth.signOut();el("dashboard").hidden=true;el("loginPanel").hidden=false;el("password").value="";show("已登出")}
 </script>
 </body>
 </html>
