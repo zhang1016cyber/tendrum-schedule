@@ -417,7 +417,9 @@ async function loadDashboard(){
     empRes,periodRes,availRes,shiftRes,
     profileRes,trialRes,noteRes
   ] = results;
-
+ 
+const employees = empRes.data || [];
+ 
   const officialEmployees = employees.filter(
   e => e.employee_code !== "test001"
 );
