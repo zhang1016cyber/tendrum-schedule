@@ -418,7 +418,9 @@ async function loadDashboard(){
     profileRes,trialRes,noteRes
   ] = results;
 
-  const employees = empRes.data || [];
+  const officialEmployees = employees.filter(
+  e => e.employee_code !== "test001"
+);
   const periods = periodRes.data || [];
   const availability = availRes.data || [];
   const shifts = shiftRes.data || [];
@@ -431,11 +433,11 @@ async function loadDashboard(){
   });
 
   el("employeeCount").textContent =
-    empRes.error ? "讀取失敗" : employees.length;
+  empRes.error ? "讀取失敗" : officialEmployees.length;
 
-  el("monthlyCount").textContent =
-    empRes.error ? "—" :
-    employees.filter(x=>x.is_monthly===true).length;
+ el("monthlyCount").textContent =
+  empRes.error ? "—" :
+  officialEmployees.filter(x=>x.is_monthly===true).length;
 
   el("availabilityCount").textContent =
     availRes.error ? "讀取失敗" : availability.length;
@@ -457,9 +459,9 @@ async function loadDashboard(){
   const er = el("employeeRows");
   er.replaceChildren();
 
-  if(!employees.length) emptyRow(er,"目前沒有員工資料",4);
+  if(!officialEmployees.length) emptyRow(er,"目前沒有員工資料",4);
 
-  employees.forEach(e=>{
+  officialEmployees.forEach(e=>{
     const tr = document.createElement("tr");
     cell(tr,e.employee_code);
     cell(tr,e.display_name);
