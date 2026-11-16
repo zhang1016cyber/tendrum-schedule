@@ -780,7 +780,8 @@ async function loadTrialDaySettings(){
 }
 
 
-// 載入當日可排班員工
+
+// 載入當日可排班員工：完整顯示早班、下午班及 X
 async function loadTrialCandidates(){
   const date = el("trialWorkDate").value;
   const box = el("trialStaffCandidates");
@@ -813,20 +814,48 @@ async function loadTrialCandidates(){
     return;
   }
 
-  data.forEach(person=>{
-    const item = document.createElement("div");
-    item.className = "card";
-    item.style.margin = "8px 0";
-    item.textContent =
-      person.employee_code+"｜"+
-      person.display_name+"｜"+
-      person.preference;
-    box.appendChild(item);
+  const groups = [
+    {
+      title:"早班可排名單",
+      values:data.filter(p => p.preference === "早" || p.preference === "早午")
+    },
+    {
+      title:"下午班可排名單",
+      values:data.filter(p => p.preference === "午" || p.preference === "早午")
+    },
+    {
+      title:"全天不能上班（X）",
+      values:data.filter(p => p.preference === "X")
+    }
+  ];
+
+  groups.forEach(group=>{
+    const heading = document.createElement("h4");
+    heading.textContent = group.title+"（"+group.values.length+" 人）";
+    box.appendChild(heading);
+
+    if(group.values.length === 0){
+      const empty = document.createElement("p");
+      empty.textContent = "目前沒有員工填寫此項。";
+      box.appendChild(empty);
+      return;
+    }
+
+    group.values.forEach(person=>{
+      const item = document.createElement("div");
+      item.className = "card";
+      item.style.margin = "8px 0";
+      item.textContent =
+        person.employee_code+"｜"+
+        person.display_name+"｜填寫："+person.preference;
+      box.appendChild(item);
+    });
   });
 
   status.textContent =
-    date+" 已載入 "+data.length+" 位填寫意願的員工。";
+    date+" 已載入全部 "+data.length+" 位填寫意願的員工；X 名單僅供主管提醒，不列入可排班人數。";
 }
+
 
 </script>
 </body>
