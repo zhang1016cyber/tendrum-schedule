@@ -373,6 +373,8 @@ async function managerLogin(){
     (profile.display_name || "主管")+"｜唯讀檢視";
 
   await loadDashboard();
+ buildTrialScheduler();
+await loadTrialDefaults();
 }
 
 function cell(row,value){
@@ -554,6 +556,229 @@ async function logout(){
   el("password").value = "";
   show("已登出");
 }
+ // ===== 12月試用排班工作台 =====
+
+function buildTrialScheduler(){
+  if(el("trialScheduler")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "trialScheduler";
+  panel.className = "card";
+
+  panel.innerHTML = `
+    <h2>12月主管人工排班</h2>
+
+    <p class="notice">
+      主管依照每日人力需求，自行挑選員工及安排職位。
+      不會自動排序或自動排班。
+    </p>
+
+    <h3>一、基本人力需求</h3>
+
+    <label>平日早班需求人數</label>
+    <input id="weekdayMorning" type="number" min="0" value="0">
+
+    <label>平日下午班需求人數</label>
+    <input id="weekdayAfternoon" type="number" min="0" value="0">
+
+    <label>假日早班需求人數</label>
+    <input id="holidayMorning" type="number" min="0" value="0">
+
+    <label>假日下午班需求人數</label>
+    <input id="holidayAfternoon" type="number" min="0" value="0">
+
+    <button onclick="saveTrialDefaults()">
+      儲存基本人力需求
+    </button>
+
+    <hr>
+
+    <h3>二、每日排班設定</h3>
+
+    <label>選擇日期</label>
+    <input
+      id="trialWorkDate"
+      type="date"
+      min="2026-12-01"
+      max="2026-12-31"
+      value="2026-12-01"
+        onchange="loadTrialDaySettings()"
+    >
+
+    <label>日期類型</label>
+    <select id="trialDayType" onchange="loadTrialDaySettings()">
+      <option value="平日">平日</option>
+      <option value="假日">假日</option>
+    </select>
+
+    <label>早班需求人數</label>
+    <input id="trialMorningRequired" type="number" min="0" value="0">
+
+    <label>下午班需求人數</label>
+    <input id="trialAfternoonRequired" type="number" min="0" value="0">
+
+    <button onclick="saveTrialDaySettings()">
+      儲存當日人力需求
+    </button>
+
+    <hr>
+
+    <h3>三、員工挑選及職位安排</h3>
+
+    <div id="trialStaffCandidates">
+      請先選擇日期並載入員工填班意願。
+    </div>
+
+    <button onclick="loadTrialCandidates()">
+      載入當日可排班員工
+    </button>
+
+    <div id="trialScheduleStatus" class="status">
+      尚未開始排班
+    </div>
+  `;
+
+  el("dashboard").appendChild(panel);
+}
+ 
+// ===== 主管人力需求儲存功能 =====
+
+// 載入平日、假日基本需求
+async function loadTrialDefaults(){
+  const {data,error} = await db
+    .from("availability_trial_demand_defaults")
+    .select("*")
+    .eq("id",1)
+    .maybeSingle();
+
+  if(error){
+    el("trialScheduleStatus").textContent =
+      "讀取基本人力需求失敗："+error.message;
+    return;
+  }
+
+  if(!data) return;
+
+  el("weekdayMorning").value = data.weekday_morning;
+  el("weekdayAfternoon").value = data.weekday_afternoon;
+  el("holidayMorning").value = data.holiday_morning;
+  el("holidayAfternoon").value = data.holiday_afternoon;
+}
+
+// 儲存平日、假日基本需求
+async function saveTrialDefaults(){
+  const values = {
+    id:1,
+    weekday_morning:Number(el("weekdayMorning").value),
+    weekday_afternoon:Number(el("weekdayAfternoon").value),
+    holiday_morning:Number(el("holidayMorning").value),
+    holiday_afternoon:Number(el("holidayAfternoon").value),
+    updated_at:new Date().toISOString()
+  };
+
+  if(Object.values(values).some(v =>
+    typeof v === "number" && (!Number.isInteger(v) || v < 0)
+  )){
+    alert("人數請輸入 0 或正整數");
+    return;
+  }
+
+  const {error} = await db
+    .from("availability_trial_demand_defaults")
+    .upsert(values,{onConflict:"id"});
+
+  el("trialScheduleStatus").textContent =
+    error ? "儲存失敗："+error.message :
+    "平日、假日基本人力需求已儲存。";
+}
+
+// 儲存單日人力需求
+async function saveTrialDaySettings(){
+  const date = el("trialWorkDate").value;
+  const morning = Number(el("trialMorningRequired").value);
+  const afternoon = Number(el("trialAfternoonRequired").value);
+
+  if(!date || !date.startsWith("2026-12-")){
+    alert("請選擇 2026 年 12 月的日期");
+    return;
+  }
+
+  if(
+    !Number.isInteger(morning) || morning < 0 ||
+    !Number.isInteger(afternoon) || afternoon < 0
+  ){
+    alert("人數請輸入 0 或正整數");
+    return;
+  }
+
+  const {error} = await db
+    .from("availability_trial_day_settings")
+    .upsert({
+      work_date:date,
+      day_type:el("trialDayType").value,
+      morning_required:morning,
+      afternoon_required:afternoon,
+      updated_at:new Date().toISOString()
+    },{onConflict:"work_date"});
+
+  el("trialScheduleStatus").textContent =
+    error ? "儲存失敗："+error.message :
+    date+" 人力需求已儲存。";
+}
+
+async function loadTrialDaySettings(){
+  const date = el("trialWorkDate").value;
+  if(!date || !date.startsWith("2026-12-")) return;
+
+  const {data,error} = await db
+    .from("availability_trial_day_settings")
+    .select("*")
+    .eq("work_date",date)
+    .maybeSingle();
+
+  if(error){
+    el("trialScheduleStatus").textContent =
+      "讀取當日設定失敗："+error.message;
+    return;
+  }
+
+  if(data){
+    el("trialDayType").value = data.day_type;
+    el("trialMorningRequired").value = data.morning_required;
+    el("trialAfternoonRequired").value = data.afternoon_required;
+    el("trialScheduleStatus").textContent =
+      date+" 已載入個別日期設定。";
+    return;
+  }
+
+  const type = el("trialDayType").value;
+  const defaults = await db
+    .from("availability_trial_demand_defaults")
+    .select("*")
+    .eq("id",1)
+    .maybeSingle();
+
+  if(defaults.error){
+    el("trialScheduleStatus").textContent =
+      "讀取基本需求失敗："+defaults.error.message;
+    return;
+  }
+
+  if(defaults.data){
+    const d = defaults.data;
+    el("trialMorningRequired").value =
+      type === "平日" ? d.weekday_morning : d.holiday_morning;
+    el("trialAfternoonRequired").value =
+      type === "平日" ? d.weekday_afternoon : d.holiday_afternoon;
+  }else{
+    el("trialMorningRequired").value = 0;
+    el("trialAfternoonRequired").value = 0;
+  }
+
+  el("trialScheduleStatus").textContent =
+    date+" 尚無個別設定，已帶入"+type+"基本需求。";
+}
+
 </script>
 </body>
 </html>
