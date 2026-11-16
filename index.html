@@ -779,6 +779,55 @@ async function loadTrialDaySettings(){
     date+" 尚無個別設定，已帶入"+type+"基本需求。";
 }
 
+
+// 載入當日可排班員工
+async function loadTrialCandidates(){
+  const date = el("trialWorkDate").value;
+  const box = el("trialStaffCandidates");
+  const status = el("trialScheduleStatus");
+
+  if(!date || !date.startsWith("2026-12-")){
+    status.textContent = "請先選擇 2026 年 12 月的日期。";
+    return;
+  }
+
+  box.textContent = "正在載入員工填班意願……";
+
+  const {data,error} = await db
+    .from("availability_trial")
+    .select("employee_code,display_name,preference")
+    .eq("work_date",date)
+    .order("display_name");
+
+  if(error){
+    box.textContent = "讀取失敗："+error.message;
+    status.textContent = "請確認資料庫設定。";
+    return;
+  }
+
+  box.replaceChildren();
+
+  if(!data || data.length === 0){
+    box.textContent = "這一天目前還沒有員工填寫意願。";
+    status.textContent = date+" 尚無填班資料。";
+    return;
+  }
+
+  data.forEach(person=>{
+    const item = document.createElement("div");
+    item.className = "card";
+    item.style.margin = "8px 0";
+    item.textContent =
+      person.employee_code+"｜"+
+      person.display_name+"｜"+
+      person.preference;
+    box.appendChild(item);
+  });
+
+  status.textContent =
+    date+" 已載入 "+data.length+" 位填寫意願的員工。";
+}
+
 </script>
 </body>
 </html>
