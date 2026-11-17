@@ -919,7 +919,7 @@ async function buildTrialManualEditor(date){
   box.appendChild(title);
 
   const note = document.createElement("p");
-  note.textContent = "0＝休假；1＝獨立作業；2＝帶實習生。";
+  note.textContent = "0=休假；1=獨立作業；2=帶實習生；6=第六天。";
   box.appendChild(note);
 
   staff.forEach(person=>{
@@ -944,7 +944,7 @@ async function buildTrialManualEditor(date){
       select.style.width = "100%";
       select.style.padding = "10px";
 
-      [0,1,2].forEach(code=>{
+      [0,1,2,6].forEach(code=>{
         const option = document.createElement("option");
         option.value = code;
         option.textContent = String(code);
