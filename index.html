@@ -857,6 +857,164 @@ async function loadTrialCandidates(){
 }
 
 
+async function loadTrialManualFromButton(){
+  const date = el("trialWorkDate").value;
+  if(!date){
+    alert("請先選擇日期");
+    return;
+  }
+  await buildTrialManualEditor(date);
+}
+
+async function buildTrialManualEditor(date){
+  const box = el("trialStaffCandidates");
+  const status = el("trialScheduleStatus");
+
+  box.replaceChildren();
+  status.textContent = "正在載入員工及既有排班……";
+
+  const {data:staff,error:staffError} = await db
+    .from("employees")
+    .select("id,employee_code,display_name")
+    .eq("active",true)
+    .order("employee_code");
+
+  if(staffError){
+    status.textContent = "讀取員工失敗："+staffError.message;
+    return;
+  }
+
+  const {data:availability,error:availabilityError} = await db
+    .from("availability_trial")
+    .select("employee_id,preference")
+    .eq("work_date",date);
+
+  if(availabilityError){
+    status.textContent = "讀取填班意願失敗："+availabilityError.message;
+    return;
+  }
+
+  const {data:existing,error:existingError} = await db
+    .from("availability_trial_shifts")
+    .select("employee_id,shift_code,work_code")
+    .eq("work_date",date);
+
+  if(existingError){
+    status.textContent = "讀取既有排班失敗："+existingError.message;
+    return;
+  }
+
+  const prefs = {};
+  (availability || []).forEach(a=>{
+    prefs[a.employee_id] = a.preference;
+  });
+
+  const codes = {};
+  (existing || []).forEach(r=>{
+    codes[r.employee_id+"_"+r.shift_code] = r.work_code;
+  });
+
+  const title = document.createElement("h3");
+  title.textContent = date+"｜主管每日排班代碼設定";
+  box.appendChild(title);
+
+  const note = document.createElement("p");
+  note.textContent = "0＝休假；1＝獨立作業；2＝帶實習生。";
+  box.appendChild(note);
+
+  staff.forEach(person=>{
+    const preference = prefs[person.id] || "未填寫";
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.margin = "8px 0";
+
+    const name = document.createElement("strong");
+    name.textContent =
+      person.employee_code+"｜"+person.display_name+
+      "｜意願："+preference;
+    card.appendChild(name);
+
+    ["早","午"].forEach((shift,index)=>{
+      const label = document.createElement("label");
+      label.textContent = index === 0 ? "早上代碼" : "下午代碼";
+      card.appendChild(label);
+
+      const select = document.createElement("select");
+      select.id = "code_"+person.id+"_"+shift;
+      select.style.width = "100%";
+      select.style.padding = "10px";
+
+      [0,1,2].forEach(code=>{
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = String(code);
+        select.appendChild(option);
+      });
+
+      const allowed =
+        preference === "早午" ||
+        (index === 0 && preference === "早") ||
+        (index === 1 && preference === "午");
+
+      const key = person.id+"_"+shift;
+      select.value = codes[key] !== undefined
+        ? String(codes[key])
+        : "0";
+
+      if(!allowed){
+        select.value = "0";
+        select.disabled = true;
+      }
+
+      card.appendChild(select);
+    });
+
+    box.appendChild(card);
+  });
+
+  const save = document.createElement("button");
+  save.textContent = "儲存當日排班";
+  save.onclick = ()=>saveTrialManualSchedule(date,staff,prefs);
+  box.appendChild(save);
+
+  status.textContent =
+    date+" 已載入 "+staff.length+
+    " 位員工，可設定早上及下午代碼。";
+}
+
+async function saveTrialManualSchedule(date,staff,prefs){
+  const rows = [];
+
+  staff.forEach(person=>{
+    ["早","午"].forEach(shift=>{
+      const select = el("code_"+person.id+"_"+shift);
+
+      rows.push({
+        employee_id:person.id,
+        employee_code:person.employee_code,
+        display_name:person.display_name,
+        work_date:date,
+        shift_code:shift,
+        work_code:Number(select.value),
+        is_published:false
+      });
+    });
+  });
+
+  if(!confirm("確定儲存 "+date+" 的早上及下午排班嗎？")) return;
+
+  const {error} = await db
+    .from("availability_trial_shifts")
+    .upsert(rows,{
+      onConflict:"employee_id,work_date,shift_code"
+    });
+
+  el("trialScheduleStatus").textContent =
+    error
+      ? "儲存失敗："+error.message
+      : date+" 排班已儲存，目前尚未發布。";
+}
+
 </script>
 </body>
 </html>
